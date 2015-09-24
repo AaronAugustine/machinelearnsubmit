@@ -1,0 +1,151 @@
+---
+title: "Predict Exercise Class"
+author: "Aaron Augustine"
+date: "September 22, 2015"
+output: 
+  html_document: 
+    fig_caption: yes
+    keep_md: yes
+---
+
+#Executive Summary
+The goal of this analysis was to complete a class project project is to predict the manner in which an exercise was conducted.  More information about this dataset is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The analysis will apply multiple machine learning models to predict the "classe" variable.  From this work we found than the Random Forest model produced the best accuracy.  
+
+#Data Analysis
+```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+#set working directory
+setwd("~/CourseraRClass/MachineLearning")
+
+library(data.table)
+library(lattice)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(klaR)
+library(gbm)
+library(plyr)
+#setting seed to get reproducable results
+set.seed(123)
+```
+##Download files
+First we'll start downloading the training and testing data files.
+```{r}
+#download files
+fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+if (!file.exists("./pml-training.csv")) {
+  message("downloading pml-training.csv...")
+  download.file(fileUrl1, destfile = "./pml-training.csv")
+  message("done downloading pml-training.csv...")
+} else {
+  message("pml-training.csv already exists...")
+}
+fileUrl2 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+if (!file.exists("./pml-testing.csv")) {
+  message("downloading pml-testing.csv...")
+  download.file(fileUrl2, destfile = "./pml-testing.csv")
+  message("done downloading pml-testing.csv...")
+} else {
+  message("pml-testing.csv already exists...")
+}
+```
+From there I identified created a file called variable_info.csv.  In this file I indicated which variable I wanted to keep for analysis, specifically removing any variable that (a) Is an ID variable, (b) summary variable, or not well populated.  I read in the training and testing datasets and the variable info file.
+```{r}
+varinfo <-fread("./variable_info.csv",sep=',')      
+training<-fread("./pml-training.csv",sep=',',stringsAsFactors=TRUE)
+testing <-fread("./pml-testing.csv" ,sep=',',stringsAsFactors=TRUE)
+```
+Then I keep only the desired variables.
+```{r}
+nlist1<-varinfo[varinfo$keep==1]
+nlist2<-as.vector(nlist1$colnum)
+colnum<-as.numeric(nlist2)
+training<-training[,colnum,with=FALSE]
+training$classe<-as.factor(training$classe)
+```
+
+I further divided the training dataset into subtrain and subtest.  Subtrain would be used for modeling while subtest would be used for cross validation.  I used 50% of the data for training.  When I used 60% the models seemed to over fit.
+```{r}
+inTrain <- createDataPartition(y=training$classe,p=0.50, list=FALSE)
+# subset data to training
+subtrain <- training[as.numeric(inTrain),]
+# subset data (the rest) to test
+subtest <- training[-as.numeric(inTrain),]
+# dimension of original and training dataset
+rbind("original dataset" = dim(training),
+      "subtrain set" = dim(subtrain),
+      "subtest  set" = dim(subtest),
+      "original test"= dim(testing))
+subtrain<-data.frame(subtrain)
+```
+##Examine the data
+After subsetting the variables, I plotted all of the predictor variables against the classe variable.  The code for this is given in the appendix and the figures were written out to the working directory with the file, predictor_plots.pdf.  Each of the predictors alone will not give a clean classification so my approach will be to start by feeding in all the predictors.
+
+##Modeling
+For predicting the classe variable, I first set the resampling method to do repeated cross fold validation using 5 folds repeated 3 times.
+```{r}
+fitControl <- trainControl(## 5-fold CV
+  method = "repeatedcv",
+  number = 5,
+  ## repeated three times
+  repeats = 3)
+```
+From there I executed three model setting the method option to each of the following options: linear discriminant analysis, boosting with trees, and random forest.
+```{r}
+print("Linear Discriminant Analysis Model")
+modfit0<-train(classe ~ ., data=subtrain, method="lda",trControl = fitControl)
+modfit0
+
+print("Boosting with trees Model")
+#modfit1<-modfit0
+modfit1 <- train(classe ~ ., data=subtrain, method="gbm",trControl =fitControl,verbose=FALSE)
+modfit1
+
+print("Random Forest Model")
+#modfit2<-modfit0
+modfit2<-train(classe ~ . , data=subtrain, method="rf", trControl = fitControl)
+modfit2
+```
+
+#WARNING adjust modfit pieces
+
+##Results
+Overall the Random Forest model produced the best accuracy.  Looking at the results the in-sample error would be 1.84%.  
+```{r}
+confusionMatrix(subtest$classe,predict(modfit2,subtest))
+```
+Applying the model to the subtest dataset, I would expect the out-of-sample error to be 1.07%.
+
+##Project Submissions
+Lastly, we write out the results from the random forest model for the project submission files
+```{r}
+results<-as.character(predict(modfit2,testing))
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(results)
+```
+verify writeup to < 2000 words and the number of figures to be less than 5.
+It will make it easier for the graders if you submit a repo with a gh-pages
+branch so the HTML page can be viewed online (and you always want to make
+it easy on graders :-).
+
+#Appendix
+```{r}
+plotfile<-data.frame(subtrain)
+end<-length(plotfile)-1
+pdf(file="predictor_plots.pdf")   
+for (i in 1:end){
+  m1 <- ggplot(plotfile, aes(x=plotfile[,i])) + ggtitle(names(plotfile)[i])
+  m2 <- m1 + geom_histogram(aes(y = ..density..),binwidth=10) + geom_density()+ facet_grid(classe ~ .)
+  print(m2)
+}
+dev.off()
+```
+
