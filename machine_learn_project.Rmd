@@ -1,5 +1,5 @@
 ---
-title: "Predict Exercise Class"
+title: "Predict Exercise Class" 
 author: "Aaron Augustine"
 date: "September 22, 2015"
 output: 
@@ -8,10 +8,10 @@ output:
     keep_md: yes
 ---
 
-#Executive Summary
-The goal of this analysis was to complete a class project project is to predict the manner in which an exercise was conducted.  More information about this dataset is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+#Executive Summary 
+The goal of this analysis was to complete a class project project is to predict the manner in which an exercise was conducted.  More information about this dataset is available from the website: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
 
-The analysis will apply multiple machine learning models to predict the "classe" variable.  From this work we found than the Random Forest model produced the best accuracy.  
+The analysis will apply multiple machine learning models to predict the "classe" variable.  From this work I found than the Random Forest model produced the best accuracy.  
 
 #Data Analysis
 ```{r echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
@@ -27,10 +27,9 @@ library(klaR)
 library(gbm)
 library(plyr)
 #setting seed to get reproducable results
-set.seed(123)
 ```
 ##Download files
-First we'll start downloading the training and testing data files.
+First I started by downloading the training and testing data files.
 ```{r}
 #download files
 fileUrl1 <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
@@ -50,13 +49,13 @@ if (!file.exists("./pml-testing.csv")) {
   message("pml-testing.csv already exists...")
 }
 ```
-From there I identified created a file called variable_info.csv.  In this file I indicated which variable I wanted to keep for analysis, specifically removing any variable that (a) Is an ID variable, (b) summary variable, or not well populated.  I read in the training and testing datasets and the variable info file.
+From there I created a file called variable_info.csv.  In this file I indicated which variables I wanted to keep for analysis, specifically removing any variable that (a) Is an ID variable, (b) summary variable, (c) or not well populated.  I read in the training and testing datasets and the variable info file using the code below.
 ```{r}
 varinfo <-fread("./variable_info.csv",sep=',')      
 training<-fread("./pml-training.csv",sep=',',stringsAsFactors=TRUE)
 testing <-fread("./pml-testing.csv" ,sep=',',stringsAsFactors=TRUE)
 ```
-Then I keep only the desired variables.
+Then I kept only the desired variables & set the classe variable as a factor variable.
 ```{r}
 nlist1<-varinfo[varinfo$keep==1]
 nlist2<-as.vector(nlist1$colnum)
@@ -65,22 +64,18 @@ training<-training[,colnum,with=FALSE]
 training$classe<-as.factor(training$classe)
 ```
 
-I further divided the training dataset into subtrain and subtest.  Subtrain would be used for modeling while subtest would be used for cross validation.  I used 50% of the data for training.  When I used 60% the models seemed to over fit.
+I further divided the training dataset into subtrain and subtest.  Subtrain would be used for modeling while subtest would be used for cross validation.  I used 50% of the data for subtrain.  When I used 60% the models seemed to over fit.
 ```{r}
+set.seed(123)
 inTrain <- createDataPartition(y=training$classe,p=0.50, list=FALSE)
 # subset data to training
 subtrain <- training[as.numeric(inTrain),]
 # subset data (the rest) to test
 subtest <- training[-as.numeric(inTrain),]
-# dimension of original and training dataset
-rbind("original dataset" = dim(training),
-      "subtrain set" = dim(subtrain),
-      "subtest  set" = dim(subtest),
-      "original test"= dim(testing))
 subtrain<-data.frame(subtrain)
 ```
 ##Examine the data
-After subsetting the variables, I plotted all of the predictor variables against the classe variable.  The code for this is given in the appendix and the figures were written out to the working directory with the file, predictor_plots.pdf.  Each of the predictors alone will not give a clean classification so my approach will be to start by feeding in all the predictors.
+After subsetting the variables, I plotted all of the predictor variables against the classe variable.  The code for this is given in the appendix and the figures were written out to the working directory with the file, predictor_plots.pdf.  Each of the predictors alone did not give a clean classification so my approach was to start by feeding in all the predictors.
 
 ##Modeling
 For predicting the classe variable, I first set the resampling method to do repeated cross fold validation using 5 folds repeated 3 times.
@@ -93,32 +88,26 @@ fitControl <- trainControl(## 5-fold CV
 ```
 From there I executed three model setting the method option to each of the following options: linear discriminant analysis, boosting with trees, and random forest.
 ```{r}
-print("Linear Discriminant Analysis Model")
+set.seed(123)
 modfit0<-train(classe ~ ., data=subtrain, method="lda",trControl = fitControl)
 modfit0
 
-print("Boosting with trees Model")
-#modfit1<-modfit0
 modfit1 <- train(classe ~ ., data=subtrain, method="gbm",trControl =fitControl,verbose=FALSE)
 modfit1
 
-print("Random Forest Model")
-#modfit2<-modfit0
 modfit2<-train(classe ~ . , data=subtrain, method="rf", trControl = fitControl)
 modfit2
 ```
 
-#WARNING adjust modfit pieces
-
 ##Results
-Overall the Random Forest model produced the best accuracy.  Looking at the results the in-sample error would be 1.84%.  
+Overall the Random Forest model produced the best accuracy.  Looking at the results the in-sample error would be about 1.3%.  Applying the model to the subtest dataset using the code below, I would expect the out-of-sample error to be around 1.04%.  It's interesting that the out-of-sample error is slightly lower than the in-sample-error.  If I used more data for training I would expect the in-sample error to increase. 
 ```{r}
 confusionMatrix(subtest$classe,predict(modfit2,subtest))
 ```
-Applying the model to the subtest dataset, I would expect the out-of-sample error to be 1.07%.
+
 
 ##Project Submissions
-Lastly, we write out the results from the random forest model for the project submission files
+Lastly, I wrote out the results from the random forest model for the project submission files
 ```{r}
 results<-as.character(predict(modfit2,testing))
 pml_write_files = function(x){
@@ -131,12 +120,9 @@ pml_write_files = function(x){
 
 pml_write_files(results)
 ```
-verify writeup to < 2000 words and the number of figures to be less than 5.
-It will make it easier for the graders if you submit a repo with a gh-pages
-branch so the HTML page can be viewed online (and you always want to make
-it easy on graders :-).
 
 #Appendix
+Code used to plot predictors
 ```{r}
 plotfile<-data.frame(subtrain)
 end<-length(plotfile)-1
